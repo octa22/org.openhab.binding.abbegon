@@ -15,7 +15,7 @@ import org.openhab.core.binding.BindingProvider;
  * @since 1.9.0
  */
 public interface AbbEgonBindingProvider extends BindingProvider {
-    String getItemType(String itemName);
+    String getItemId(String itemName);
     String getItemState(String itemName);
     void setItemState(String itemName, String state);
 }

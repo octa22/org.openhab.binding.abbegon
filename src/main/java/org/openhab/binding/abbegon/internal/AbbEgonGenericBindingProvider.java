@@ -68,9 +68,9 @@ public class AbbEgonGenericBindingProvider extends AbstractGenericBindingProvide
 	}
 
 
-	public String getItemType(String itemName) {
+	public String getItemId(String itemName) {
 		final AbbEgonBindingConfig config = (AbbEgonBindingConfig) this.bindingConfigs.get(itemName);
-		return config != null ? (config.getType()) : null;
+		return config != null ? (config.getId()) : null;
 	}
 	
 	/**
@@ -82,15 +82,15 @@ public class AbbEgonGenericBindingProvider extends AbstractGenericBindingProvide
 	class AbbEgonBindingConfig implements BindingConfig {
 		// put member fields here which holds the parsed values
 		// put member fields here which holds the parsed values
-		private String type;
+		private String id;
 		private String state;
 
-		AbbEgonBindingConfig(String type) {
-			this.type = type;
+		AbbEgonBindingConfig(String id) {
+			this.id = id;
 		}
 
-		public String getType() {
-			return type;
+		public String getId() {
+			return id;
 		}
 
 		public String getState() {

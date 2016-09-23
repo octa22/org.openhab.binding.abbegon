@@ -84,10 +84,8 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 
 		// the configuration is guaranteed not to be null, because the component definition has the
 		// configuration-policy set to require. If set to 'optional' then the configuration may be null
-
-
 		readConfiguration(configuration);
-		login();
+		loginEgon();
 		if(!device.equals("0") && tryParseInt(device)) {
 			logger.info("Detected ABB Ego-n device: " + device);
 			setProperlyConfigured(true);
@@ -131,7 +129,7 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 		host = "http://" + ip + ":" + port;
 	}
 
-	private void login() {
+	private void loginEgon() {
 		String url = null;
 
 		try {
@@ -141,14 +139,15 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 			device = line.replace("device=", "").replace("\n","");
 
 			if (!tryParseInt(device)) {
-				logger.debug("ABB Ego-n user response: " + line);
 				throw new AbbEgonException(line);
 			}
 		} catch (MalformedURLException e) {
 			logger.error("The URL '" + url + "' is malformed: " + e.toString());
-		} catch (Exception e) {
-			logger.error("Cannot get ABB Ego-n user device: " + e.toString());
-		}
+		} catch (AbbEgonException e) {
+            logger.error("Cannot authorize to ABB Ego-n device: " + e.toString());
+        } catch (Exception e) {
+            logger.error("Cannot login to ABB Ego-n device: " + e.toString());
+        }
 	}
 
 	boolean tryParseInt(String value) {
@@ -208,6 +207,7 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 		this.bundleContext = null;
 		// deallocate resources here that are no longer needed and 
 		// should be reset when activating this binding again
+		revokeEgon();
 	}
 
 	
@@ -234,7 +234,7 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 	protected void execute() {
 		// the frequently executed code (polling) goes here ...
 		logger.debug("execute() method is called!");
-		login();
+		loginEgon();
 
 		String status = getEgonStatus();
 
@@ -247,9 +247,9 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 
 			for (final AbbEgonBindingProvider provider : providers) {
 				for (final String itemName : provider.getItemNames()) {
-					String id = provider.getItemType(itemName);
+					String id = provider.getItemId(itemName);
 
-					String state = getState(id, document, xpath );
+					String state = getItemState(id, document, xpath );
 
 					if (!state.equals(provider.getItemState(itemName)) && !"???".equals(state)) {
 						provider.setItemState(itemName, state);
@@ -274,7 +274,7 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 
 	}
 
-	private String getState(String id, Document document, XPath xpath) throws Exception {
+	private String getItemState(String id, Document document, XPath xpath) throws Exception {
 
 		String value = (String) xpath.evaluate("/egon_data/element_states/element_state[attribute::id='" + id + "']/@value", document, XPathConstants.STRING);
 		logger.debug("ABB Ego-n id: " + id + " value: " + value);
@@ -295,31 +295,32 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 			if (line.startsWith("<?xml ")) {
 				return line;
 			} else {
-				logger.debug("ABB Ego-n response: " + line);
 				throw new AbbEgonException(line);
 			}
 
 		} catch (MalformedURLException e) {
 			logger.error("The URL '" + url + "' is malformed: " + e.toString());
-		} catch (Exception e) {
+		} catch (AbbEgonException e) {
+            logger.error("Invalid ABB Ego-n device status received: " + e.toString());
+        }catch (Exception e) {
 			logger.error("Cannot get ABB Ego-n status: " + e.toString());
 		}
 		return "";
 	}
 
-	private void refreshEgon() {
+	private void revokeEgon() {
 		String url = null;
 
 		try {
-			url = host + "/refresh.html?device=" + device;
+			url = host + "/revoke.html?device=" + device;
 
 			String line = getHttpResponse(url);
 
-			logger.debug("ABB Ego-n Refresh response: " + line);
+			logger.debug("ABB Ego-n revoke response: " + line);
 		} catch (MalformedURLException e) {
 			logger.error("The URL '" + url + "' is malformed: " + e.toString());
 		} catch (Exception e) {
-			logger.error("Cannot send ABB Ego-n refresh: " + e.toString());
+			logger.error("Cannot send ABB Ego-n revoke: " + e.toString());
 		}
 	}
 
@@ -332,32 +333,33 @@ public class AbbEgonBinding extends AbstractActiveBinding<AbbEgonBindingProvider
 		// event bus goes here. This method is only called if one of the 
 		// BindingProviders provide a binding for the given 'itemName'.
 		logger.debug("internalReceiveCommand({},{}) is called!", itemName, command);
-		String type = getEgonDevice(itemName);
-		doAction(type, command);
+		doEgonAction(itemName, command);
 	}
 
-	private String getEgonDevice(String itemName) {
+	private String getEgonDeviceId(String itemName) {
 
 		for (final AbbEgonBindingProvider provider : providers) {
-			return provider.getItemType(itemName);
+			return provider.getItemId(itemName);
 		}
 		return "";
 	}
 
-	private void doAction(String id, Command command) {
+	private void doEgonAction(String itemName, Command command) {
 		String url = null;
+		String id = getEgonDeviceId(itemName);
 
 		try {
 			url = host + "/action.html?action=" + command + "&device=" + device + "&id=" + id;
 			String line = getHttpResponse(url);
 
 			if (!"OK\n".equals(line)) {
-				logger.debug("ABB Ego-n response: " + line);
 				throw new AbbEgonException(line);
 			}
 		} catch (MalformedURLException e) {
 			logger.error("The URL '" + url + "' is malformed: " + e.toString());
-		} catch (Exception e) {
+		} catch (AbbEgonException e) {
+            logger.error("Invalid ABB Ego-n action response received: " + e.toString());
+        } catch (Exception e) {
 			logger.error("Cannot send ABB Ego-n action: " + e.toString());
 		}
 	}
